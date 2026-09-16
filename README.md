@@ -4,24 +4,44 @@
 원본 엑셀과 처리 결과를 조인해서 다운로드해주는 사내용 웹앱입니다. 외부 인터넷 접속이
 전혀 필요 없습니다 (전부 로컬 파일/로컬 패키지만 사용).
 
-## 1. 메인코드 연결하기
+## 1. 메인코드 연결하기 (코드 수정/공개 불필요)
 
-`main_logic.py` 파일을 열어 `run(excel_path)` 함수 안에 기존 메인코드를 붙여넣으세요.
-- 코드에서 엑셀 경로를 직접 적던 줄은 지우고, 매개변수 `excel_path`를 그 자리에 쓰면 됩니다.
-- 함수 마지막에 결과를 `return` 하세요. `pandas.DataFrame`을 반환하거나, 결과 파일을
-  저장했다면 그 파일 경로(문자열)를 반환하면 됩니다.
-- 반환하는 결과에는 매칭에 쓸 키 컬럼(예: `ID`)이 포함되어 있어야 합니다.
+기존 프로젝트 폴더(`양산데이터추론코드.py`, `environment.yml`, `requirements.txt`,
+그 외 모듈 파일들)를 **통째로** `script_project/` 폴더 안에 그대로 복사해 넣으세요.
+코드는 한 줄도 고칠 필요가 없습니다 — 웹앱이 기존에 쓰시던 것과 똑같이
 
-자세한 예시는 `main_logic.py` 파일 상단 주석을 참고하세요.
+```
+conda run -n low_voltage python 양산데이터추론코드.py --input-csv <업로드된 엑셀 경로>
+```
+
+형태로 그대로 실행시키고, 실행 중 `script_project/` 폴더에 새로 생기는
+`양산판정_*.csv` 파일을 자동으로 찾아서 결과로 사용합니다.
+
+- 실행 방식/파일명/conda 환경 이름 등은 `script_config.py`에 정리되어 있습니다.
+  기본값이 이미 다음과 같이 맞춰져 있는데, 달라지면 이 파일만 고치면 됩니다.
+  - `ENTRY_SCRIPT = "양산데이터추론코드.py"`
+  - `CONDA_ENV_NAME = "low_voltage"`
+  - `INPUT_ARG_NAME = "--input-csv"`
+  - `OUTPUT_GLOB_PATTERN = "양산판정_*.csv"`
 
 ## 2. 설치 (사내망 PC/서버에서 1회만)
 
-인터넷이 되는 PC에서 아래 명령으로 필요한 패키지들을 미리 내려받아 사내망으로 옮기거나,
-사내 PyPI 미러가 있다면 그대로 설치하세요.
+이 웹앱 자체(Flask 등)에 필요한 패키지:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+기존 프로젝트가 쓰는 conda 환경도 서버에 한 번 만들어 둬야 합니다
+(`script_project/environment.yml` 기준):
+
+```bash
+conda env create -f script_project/environment.yml
+```
+
+이미 `low_voltage`라는 이름의 conda 환경이 그 서버에 있다면 이 단계는 생략해도 됩니다.
+`conda env list`로 확인하세요. 웹앱을 실행하는 터미널에서 `conda` 명령이 바로
+동작해야 합니다 (`conda run -n low_voltage python --version`으로 미리 테스트해 보세요).
 
 ## 3. 실행
 
@@ -48,11 +68,13 @@ Linux는 systemd 서비스 등록을 이용하세요.)
 1. 웹페이지에서 엑셀 파일 선택
 2. 원본 엑셀에서 매칭 기준이 되는 키 컬럼명 입력 (예: `ID`)
 3. 메인코드 결과물의 키 컬럼명이 다르면 별도 입력, 같으면 비워두기
-4. "처리 시작" 클릭 → 메인코드 실행 → 키 기준으로 원본과 결과 조인
+4. "처리 시작" 클릭 → 기존 프로젝트를 conda 환경에서 실행 → 키 기준으로 원본과 결과 조인
 5. 결과 미리보기 확인 후 "결과 파일 다운로드"
 
 ## 폴더 설명
 
 - `uploads/` : 업로드된 원본 엑셀 임시 저장 (자동 생성, 파일명에 타임스탬프 부여)
 - `outputs/` : 매칭 완료된 최종 결과 엑셀 저장
-- `main_logic.py` : 메인코드를 붙여넣는 곳 (이 파일 외에는 수정할 필요 없음)
+- `script_project/` : 기존 프로젝트 전체(스크립트, environment.yml 등)를 그대로 복사해 넣는 곳
+- `script_config.py` : 실행 파일명/conda 환경/인자 이름 등 설정
+- `script_runner.py` : `script_config.py` 설정대로 기존 프로젝트를 실행시키는 코드 (건드릴 필요 없음)

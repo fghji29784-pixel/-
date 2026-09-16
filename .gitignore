@@ -6,3 +6,7 @@ uploads/*
 !uploads/.gitkeep
 outputs/*
 !outputs/.gitkeep
+
+# 여기에 복사해 넣는 기존(비공개) 프로젝트는 이 git 저장소에 커밋되지 않습니다.
+script_project/*
+!script_project/.gitkeep

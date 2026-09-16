@@ -7,7 +7,7 @@ import pandas as pd
 from flask import Flask, render_template, request, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 
-import main_logic
+import script_runner
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -28,18 +28,11 @@ def timestamped_name(original_filename: str) -> str:
     return f"{stamp}_{uuid.uuid4().hex[:6]}_{safe_name}"
 
 
-def load_main_code_result(result):
-    """main_logic.run()의 반환값을 DataFrame으로 정규화."""
-    if isinstance(result, pd.DataFrame):
-        return result
-    if isinstance(result, str):
-        path = result if os.path.isabs(result) else os.path.join(BASE_DIR, result)
-        if path.lower().endswith(".csv"):
-            return pd.read_csv(path)
-        return pd.read_excel(path)
-    raise ValueError(
-        "메인코드(run 함수)는 DataFrame 또는 결과 파일 경로(문자열)를 반환해야 합니다."
-    )
+def load_result_file(path: str) -> pd.DataFrame:
+    """메인코드가 만들어낸 결과 파일(csv/xlsx)을 DataFrame으로 로드."""
+    if path.lower().endswith(".csv"):
+        return pd.read_csv(path)
+    return pd.read_excel(path)
 
 
 @app.route("/", methods=["GET"])
@@ -77,8 +70,8 @@ def process():
         )
 
     try:
-        raw_result = main_logic.run(saved_path)
-        result_df = load_main_code_result(raw_result)
+        result_path = script_runner.run_main_script(saved_path)
+        result_df = load_result_file(result_path)
     except Exception:
         return render_template(
             "index.html",
