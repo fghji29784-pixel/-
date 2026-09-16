@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>엑셀 처리 도구</title>
+<style>
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background:#f4f5f7; margin:0; padding:40px 16px; }
+  .card { max-width:560px; margin:0 auto; background:#fff; border-radius:10px; padding:32px; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+  h1 { font-size:20px; margin:0 0 8px; }
+  p.desc { color:#666; font-size:14px; margin:0 0 24px; }
+  label { display:block; font-size:14px; font-weight:600; margin:16px 0 6px; }
+  input[type="file"], input[type="text"] {
+    width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #d0d3d9; border-radius:6px; font-size:14px;
+  }
+  .hint { font-size:12px; color:#888; margin-top:4px; }
+  button {
+    margin-top:24px; width:100%; padding:12px; border:none; border-radius:6px;
+    background:#2f6fed; color:#fff; font-size:15px; font-weight:600; cursor:pointer;
+  }
+  button:hover { background:#2559c4; }
+  .error {
+    white-space:pre-wrap; background:#fdecec; border:1px solid #f5b5b5; color:#a33;
+    padding:12px 14px; border-radius:6px; font-size:13px; margin-bottom:16px;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>엑셀 업로드 → 처리 → 원본과 매칭</h1>
+    <p class="desc">엑셀 파일을 올리면 서버가 처리한 뒤, 지정한 키 컬럼으로 원본 엑셀과 결과를 합쳐 다운로드해 드립니다.</p>
+
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('process') }}" method="post" enctype="multipart/form-data">
+      <label for="excel_file">엑셀 파일</label>
+      <input type="file" id="excel_file" name="excel_file" accept=".xlsx,.xls" required>
+
+      <label for="key_column">매칭할 키 컬럼명 (원본 엑셀 기준)</label>
+      <input type="text" id="key_column" name="key_column" placeholder="예: ID" required>
+      <div class="hint">원본 엑셀에서 각 행을 구분하는 컬럼 이름을 그대로 입력하세요.</div>
+
+      <label for="output_key_column">처리 결과의 키 컬럼명 (다르면 입력, 같으면 비워두세요)</label>
+      <input type="text" id="output_key_column" name="output_key_column" placeholder="비워두면 위와 동일">
+
+      <button type="submit">처리 시작</button>
+    </form>
+  </div>
+</body>
+</html>
