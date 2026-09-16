@@ -54,6 +54,18 @@
   .footer-note { font-size:12px; color:var(--muted); margin-top:8px; }
   .hidden { display:none; }
   .count-pill { display:inline-block; background:#eef3ff; color:var(--blue-dark); border-radius:12px; padding:2px 10px; font-size:12px; font-weight:700; margin-left:6px; }
+  th.sortable { cursor:pointer; user-select:none; }
+  th.sortable:hover { background:#e4e9f5; }
+  .sort-arrow { font-size:10px; color:var(--blue); }
+  tr.filter-row th { background:#fafbfc; padding:4px 6px; }
+  tr.filter-row input, tr.filter-row select { width:100%; box-sizing:border-box; font-size:11px; padding:3px 4px; border:1px solid #d8dce3; border-radius:4px; }
+  td.tag-must { background:#ffe1de; }
+  td.tag-cand1 { background:#e4ecff; }
+  td.tag-cand2 { background:#eafbe9; }
+  td.tag-cand3 { background:#fff4dc; }
+  .type-toggle-row { display:flex; gap:16px; align-items:center; margin:10px 0 4px; flex-wrap:wrap; font-size:13px; }
+  .type-toggle-row label { display:flex; align-items:center; gap:4px; cursor:pointer; font-weight:600; }
+  .shown-note { font-size:12px; color:var(--muted); margin:8px 0 0; }
 </style>
 </head>
 <body>
@@ -102,7 +114,7 @@
           <input type="number" id="thCand3" step="0.01" value="0.2">
         </div>
       </div>
-      <div class="footer-note">기준값을 바꾸면 판정·요약·샘플링 후보가 즉시 다시 계산되고, 체크박스 선택 상태는 초기화됩니다.</div>
+      <div class="footer-note">기준값을 바꾸면 판정·요약·샘플링 후보가 즉시 다시 계산됩니다. 직접 체크/해제한 선택은 그대로 유지되고, 새로 후보가 된 행만 기본 체크됩니다.</div>
     </div>
 
     <div class="card">
@@ -116,11 +128,20 @@
         <span class="badge must">필수</span> 판정이 서로 다르거나(NG/OK 혼재), 원본 등급 A인데 proba가 필수 기준 이상인 셀 (체크 해제 불가)&nbsp;·&nbsp;
         <span class="badge cand1">후보1</span> 등급 E의 최소 docv7보다 docv7이 큰 등급 A 셀&nbsp;·&nbsp;
         <span class="badge cand2">후보2</span> |PROBA_case11 − PROBA_case0| 상위 16개&nbsp;·&nbsp;
-        <span class="badge cand3">후보3</span> 등급 A &amp; proba ≥ 후보3 기준
+        <span class="badge cand3">후보3</span> 등급 A &amp; proba ≥ 후보3 기준<br>
+        후보가 된 이유는 별도 칼럼 대신, 해당 원인이 된 칸 자체에 색이 칠해집니다 (마우스를 올리면 이유가 표시됩니다).
+      </div>
+      <div class="type-toggle-row">
+        <span>표시할 후보 유형:</span>
+        <label><input type="checkbox" id="filterCand1" checked> 후보1</label>
+        <label><input type="checkbox" id="filterCand2" checked> 후보2</label>
+        <label><input type="checkbox" id="filterCand3" checked> 후보3</label>
+        <span class="footer-note" style="margin:0;">(해제하면 그 유형만으로 뽑힌 행은 후보에서 제외됩니다. 필수 항목은 항상 포함됩니다.)</span>
       </div>
       <div class="table-wrap" style="margin-top:10px;">
         <table id="candidateTable"><thead></thead><tbody></tbody></table>
       </div>
+      <div class="shown-note">필터/정렬 결과 <span id="candidateShown">0</span>건 표시 중 · 컬럼 헤더 클릭 시 정렬, 헤더 아래 입력창에 검색어 입력 (숫자 컬럼은 <code>&gt;=0.5</code> 처럼 입력 가능)</div>
     </div>
 
     <div class="card">
@@ -128,6 +149,7 @@
       <div class="table-wrap">
         <table id="samplingTable"><thead></thead><tbody></tbody></table>
       </div>
+      <div class="shown-note">필터/정렬 결과 <span id="samplingShown">0</span>건 표시 중 · 다운로드 파일에는 필터와 무관하게 선택된 전체 항목이 포함됩니다.</div>
     </div>
 
     <div class="card">
@@ -178,14 +200,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var ORIG_NEEDED = ["등급", "Cell No", "Cell 위치", "PRIVT OCV #01 OCV", "PRIVT OCV #02 OCV", "PRIVT OCV #03 OCV"];
   var OUT_NEEDED = ["CELL_ID", "TRAY_ID", "LOT_ID", "PROBA_case0", "PROBA_case1", "PROBA_case11"];
   var CAND2_TOP_N = 16;
+  var TAG_ORDER = { must: 0, cand1: 1, cand2: 2, cand3: 3 };
 
   var state = { merged: [], checked: {}, thresholds: {} };
 
   var el = {};
   ["origFile", "outFile", "runBtn", "uploadMsg", "mainSections",
    "th0", "th1", "th11", "thMust", "thCand3",
-   "summaryTableWrap", "candidateTable", "candidateCount",
-   "samplingTable", "samplingCount", "fullTable", "fullCount", "downloadBtn"
+   "filterCand1", "filterCand2", "filterCand3",
+   "summaryTableWrap", "candidateTable", "candidateCount", "candidateShown",
+   "samplingTable", "samplingCount", "samplingShown",
+   "fullTable", "fullCount", "downloadBtn"
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   function toNum(v) {
@@ -196,8 +221,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function fmt(n, digits) {
-    if (n === null || n === undefined || Number.isNaN(n)) return "";
-    return Number(n).toFixed(digits === undefined ? 3 : digits);
+    if (n === null || n === undefined || (typeof n === "number" && Number.isNaN(n))) return "";
+    if (typeof n !== "number") return String(n);
+    return n.toFixed(digits === undefined ? 3 : digits);
   }
 
   function safe(v) {
@@ -239,6 +265,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return null;
   }
 
+  function findDuplicateKeys(values) {
+    var seen = {}, dup = {};
+    values.forEach(function (v) {
+      var k = String(v === null || v === undefined ? "" : v).trim();
+      if (!k) return;
+      if (seen[k]) dup[k] = true; else seen[k] = true;
+    });
+    return Object.keys(dup);
+  }
+
   function showMsg(text, type) {
     el.uploadMsg.innerHTML = text ? '<div class="msg ' + type + '">' + esc(text) + "</div>" : "";
   }
@@ -251,13 +287,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
 
     var unmatched = 0;
-    var merged = outRows.map(function (o) {
+    var merged = outRows.map(function (o, i) {
       var k = String(o[OUT_KEY] == null ? "" : o[OUT_KEY]).trim();
       var orig = origIndex[k] || null;
       if (!orig) unmatched++;
       var ocv1 = orig ? toNum(orig["PRIVT OCV #01 OCV"]) : NaN;
       var ocv3 = orig ? toNum(orig["PRIVT OCV #03 OCV"]) : NaN;
       return {
+        rowId: k + "__" + i,
         key: k,
         CELL_ID: o.CELL_ID,
         TRAY_ID: o.TRAY_ID,
@@ -292,6 +329,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       cand3: toNum(el.thCand3.value)
     };
     state.thresholds = th;
+    var typeOn = {
+      cand1: el.filterCand1.checked,
+      cand2: el.filterCand2.checked,
+      cand3: el.filterCand3.checked
+    };
 
     state.merged.forEach(function (r) {
       r.judge0 = judge(r.proba0, th.case0);
@@ -306,18 +348,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     var withDiff = state.merged
       .filter(function (r) { return !Number.isNaN(r.proba11) && !Number.isNaN(r.proba0); })
-      .map(function (r) { return { key: r.key, diff: Math.abs(r.proba11 - r.proba0) }; })
+      .map(function (r) { return { rowId: r.rowId, diff: Math.abs(r.proba11 - r.proba0) }; })
       .sort(function (a, b) { return b.diff - a.diff; })
       .slice(0, CAND2_TOP_N);
-    var cand2Keys = {};
-    withDiff.forEach(function (x) { cand2Keys[x.key] = true; });
+    var cand2Ids = {};
+    withDiff.forEach(function (x) { cand2Ids[x.rowId] = true; });
 
+    var prevChecked = state.checked;
     state.checked = {};
     state.merged.forEach(function (r) {
       var reasons = [];
       var judges = [r.judge0, r.judge1, r.judge11].filter(function (j) { return j !== "N/A"; });
       var mixed = judges.length > 1 && judges.some(function (j) { return j !== judges[0]; });
-      if (mixed) reasons.push({ type: "must", label: "필수: 판정 혼재" });
+      if (mixed) reasons.push({ type: "must", key: "mixed", label: "필수: 판정 혼재" });
 
       var maxProba = Math.max(
         Number.isNaN(r.proba0) ? -Infinity : r.proba0,
@@ -325,20 +368,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         Number.isNaN(r.proba11) ? -Infinity : r.proba11
       );
       var isGradeA = r.grade === "A";
-      if (isGradeA && maxProba >= th.must) reasons.push({ type: "must", label: "필수: A등급·" + th.must + "↑" });
+      if (isGradeA && maxProba >= th.must) reasons.push({ type: "must", key: "mustA", label: "필수: A등급·" + th.must + "↑" });
 
-      if (isGradeA && minEDocv7 !== null && !Number.isNaN(r.docv7) && r.docv7 > minEDocv7) {
-        reasons.push({ type: "cand1", label: "후보1: E기준 초과 A" });
+      if (typeOn.cand1 && isGradeA && minEDocv7 !== null && !Number.isNaN(r.docv7) && r.docv7 > minEDocv7) {
+        reasons.push({ type: "cand1", key: "cand1", label: "후보1: E기준 초과 A" });
       }
-      if (cand2Keys[r.key]) reasons.push({ type: "cand2", label: "후보2: 상위16" });
-      if (isGradeA && maxProba >= th.cand3) reasons.push({ type: "cand3", label: "후보3: A등급·" + th.cand3 + "↑" });
+      if (typeOn.cand2 && cand2Ids[r.rowId]) reasons.push({ type: "cand2", key: "cand2", label: "후보2: 상위16" });
+      if (typeOn.cand3 && isGradeA && maxProba >= th.cand3) reasons.push({ type: "cand3", key: "cand3", label: "후보3: A등급·" + th.cand3 + "↑" });
 
       r.reasons = reasons;
       r.required = reasons.some(function (x) { return x.type === "must"; });
-      if (reasons.length) state.checked[r.key] = true;
+      if (reasons.length) state.checked[r.rowId] = prevChecked.hasOwnProperty(r.rowId) ? prevChecked[r.rowId] || r.required : true;
     });
 
     renderAll();
+  }
+
+  function computeCellTags(r, th) {
+    var tags = {};
+    function tag(colKey, reason) {
+      if (!tags[colKey] || TAG_ORDER[reason.type] < TAG_ORDER[tags[colKey].type]) tags[colKey] = reason;
+    }
+    r.reasons.forEach(function (reason) {
+      if (reason.key === "mixed") {
+        tag("judge0", reason); tag("judge1", reason); tag("judge11", reason);
+      } else if (reason.key === "mustA" || reason.key === "cand3") {
+        var limit = reason.key === "mustA" ? th.must : th.cand3;
+        tag("grade", reason);
+        if (!Number.isNaN(r.proba0) && r.proba0 >= limit) tag("proba0", reason);
+        if (!Number.isNaN(r.proba1) && r.proba1 >= limit) tag("proba1", reason);
+        if (!Number.isNaN(r.proba11) && r.proba11 >= limit) tag("proba11", reason);
+      } else if (reason.key === "cand1") {
+        tag("docv7", reason);
+      } else if (reason.key === "cand2") {
+        tag("proba0", reason); tag("proba11", reason);
+      }
+    });
+    return tags;
+  }
+
+  function tdCell(displayHtml, tag) {
+    var cls = tag ? ' class="tag-' + tag.type + '"' : "";
+    var title = tag ? ' title="' + esc(tag.label) + '"' : "";
+    return "<td" + cls + title + ">" + displayHtml + "</td>";
   }
 
   function renderSummary() {
@@ -358,63 +430,192 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       rows + "</tbody></table>";
   }
 
-  function reasonBadges(reasons) {
-    return reasons.map(function (r) {
-      return '<span class="badge ' + r.type + '">' + esc(r.label) + "</span>";
-    }).join(" ");
+  // ---- generic sortable/filterable table ----
+  function numberMatches(raw, filterStr, formatted) {
+    var m = filterStr.match(/^\s*(>=|<=|>|<|=)?\s*(-?\d+\.?\d*)\s*$/);
+    if (m) {
+      var op = m[1] || "=";
+      var target = parseFloat(m[2]);
+      if (Number.isNaN(raw)) return false;
+      if (op === ">=") return raw >= target;
+      if (op === "<=") return raw <= target;
+      if (op === ">") return raw > target;
+      if (op === "<") return raw < target;
+      if (Math.abs(raw - target) < 1e-9) return true;
+    }
+    return formatted.toLowerCase().indexOf(filterStr.toLowerCase()) !== -1;
   }
 
-  function renderCandidates() {
-    var candidates = state.merged.filter(function (r) { return r.reasons.length > 0; });
-    el.candidateCount.textContent = candidates.length + "건";
-    var head = "<tr><th></th><th>CELL_ID</th><th>TRAY_ID</th><th>LOT_ID</th><th>등급</th>" +
-      "<th>PROBA_case0</th><th>PROBA_case1</th><th>PROBA_case11</th>" +
-      "<th>판정0</th><th>판정1</th><th>판정11</th><th>docv7</th><th>사유</th></tr>";
-    var body = candidates.map(function (r) {
-      var checked = state.checked[r.key] ? "checked" : "";
-      var disabled = r.required ? "disabled" : "";
-      return "<tr>" +
-        '<td><input type="checkbox" class="cand-check" data-key="' + esc(r.key) + '" ' + checked + " " + disabled + "></td>" +
-        "<td>" + esc(r.CELL_ID) + "</td><td>" + esc(r.TRAY_ID) + "</td><td>" + esc(r.LOT_ID) + "</td><td>" + esc(r.grade) + "</td>" +
-        "<td>" + fmt(r.proba0) + "</td><td>" + fmt(r.proba1) + "</td><td>" + fmt(r.proba11) + "</td>" +
-        "<td>" + esc(r.judge0) + "</td><td>" + esc(r.judge1) + "</td><td>" + esc(r.judge11) + "</td>" +
-        "<td>" + fmt(r.docv7) + "</td><td>" + reasonBadges(r.reasons) + "</td>" +
-        "</tr>";
-    }).join("");
-    el.candidateTable.querySelector("thead").innerHTML = head;
-    el.candidateTable.querySelector("tbody").innerHTML = body;
+  function createFilterableTable(tableEl, columns, opts) {
+    var sort = { key: null, dir: 1 };
+    var filters = {};
 
-    Array.prototype.forEach.call(el.candidateTable.querySelectorAll(".cand-check"), function (cb) {
-      cb.addEventListener("change", function () {
-        state.checked[cb.getAttribute("data-key")] = cb.checked;
-        renderSamplingList();
-        renderFullTable();
+    function filterOptions(colKey) {
+      var set = {};
+      opts.getSourceRows().forEach(function (r) {
+        var v = r[colKey];
+        if (v !== null && v !== undefined && v !== "") set[String(v)] = true;
       });
-    });
+      return Object.keys(set).sort();
+    }
+
+    function buildHeader() {
+      var lead = opts.leadingTh || "";
+      var headRow = "<tr>" + lead + columns.map(function (c) {
+        var arrow = sort.key === c.key ? (sort.dir === 1 ? " ▲" : " ▼") : "";
+        return '<th class="sortable" data-key="' + c.key + '">' + esc(c.label) + '<span class="sort-arrow">' + arrow + "</span></th>";
+      }).join("") + "</tr>";
+
+      var filterRow = "<tr class=\"filter-row\">" + (lead ? "<th></th>" : "") + columns.map(function (c) {
+        if (c.type === "select") {
+          var options = filterOptions(c.key);
+          var cur = filters[c.key] || "";
+          return '<th><select data-fkey="' + c.key + '"><option value="">전체</option>' +
+            options.map(function (o) {
+              return '<option value="' + esc(o) + '"' + (o === cur ? " selected" : "") + ">" + esc(o) + "</option>";
+            }).join("") + "</select></th>";
+        }
+        var placeholder = c.type === "number" ? "예: >=0.5" : "검색";
+        var curVal = filters[c.key] || "";
+        return '<th><input type="text" data-fkey="' + c.key + '" placeholder="' + placeholder + '" value="' + esc(curVal) + '"></th>';
+      }).join("") + "</tr>";
+
+      tableEl.querySelector("thead").innerHTML = headRow + filterRow;
+
+      Array.prototype.forEach.call(tableEl.querySelectorAll("thead th.sortable"), function (th) {
+        th.addEventListener("click", function () {
+          var key = th.getAttribute("data-key");
+          if (sort.key === key) sort.dir = -sort.dir; else { sort.key = key; sort.dir = 1; }
+          buildHeader();
+          refresh();
+        });
+      });
+      Array.prototype.forEach.call(tableEl.querySelectorAll("[data-fkey]"), function (inp) {
+        var key = inp.getAttribute("data-fkey");
+        var evt = inp.tagName === "SELECT" ? "change" : "input";
+        inp.addEventListener(evt, function () {
+          filters[key] = inp.value;
+          refresh();
+        });
+      });
+    }
+
+    function refresh() {
+      var rows = opts.getSourceRows().filter(function (r) {
+        return columns.every(function (c) {
+          var fv = filters[c.key];
+          if (!fv) return true;
+          if (c.type === "select") return String(r[c.key] == null ? "" : r[c.key]) === fv;
+          if (c.type === "number") return numberMatches(toNum(r[c.key]), fv, fmt(r[c.key]));
+          return String(r[c.key] == null ? "" : r[c.key]).toLowerCase().indexOf(fv.toLowerCase()) !== -1;
+        });
+      });
+      if (sort.key) {
+        var col = columns.filter(function (c) { return c.key === sort.key; })[0];
+        rows = rows.slice().sort(function (a, b) {
+          var av = a[sort.key], bv = b[sort.key];
+          if (col.type === "number") {
+            av = toNum(av); bv = toNum(bv);
+            av = Number.isNaN(av) ? -Infinity : av;
+            bv = Number.isNaN(bv) ? -Infinity : bv;
+            return (av - bv) * sort.dir;
+          }
+          av = String(av == null ? "" : av); bv = String(bv == null ? "" : bv);
+          return av.localeCompare(bv) * sort.dir;
+        });
+      }
+      tableEl.querySelector("tbody").innerHTML = rows.map(opts.rowRenderer).join("");
+      if (opts.afterRender) opts.afterRender(rows);
+      if (opts.onCount) opts.onCount(rows.length);
+    }
+
+    return { buildHeader: buildHeader, refresh: refresh };
   }
+
+  var CANDIDATE_COLUMNS = [
+    { key: "CELL_ID", label: "CELL_ID", type: "text" },
+    { key: "TRAY_ID", label: "TRAY_ID", type: "text" },
+    { key: "LOT_ID", label: "LOT_ID", type: "text" },
+    { key: "grade", label: "등급", type: "select" },
+    { key: "proba0", label: "PROBA_case0", type: "number" },
+    { key: "proba1", label: "PROBA_case1", type: "number" },
+    { key: "proba11", label: "PROBA_case11", type: "number" },
+    { key: "judge0", label: "판정0", type: "select" },
+    { key: "judge1", label: "판정1", type: "select" },
+    { key: "judge11", label: "판정11", type: "select" },
+    { key: "docv7", label: "docv7", type: "number" }
+  ];
+
+  function candidateRowHtml(r) {
+    var tags = computeCellTags(r, state.thresholds);
+    var checked = state.checked[r.rowId] ? "checked" : "";
+    var disabled = r.required ? "disabled" : "";
+    return "<tr>" +
+      '<td><input type="checkbox" class="cand-check" data-id="' + esc(r.rowId) + '" ' + checked + " " + disabled + "></td>" +
+      "<td>" + esc(r.CELL_ID) + "</td><td>" + esc(r.TRAY_ID) + "</td><td>" + esc(r.LOT_ID) + "</td>" +
+      tdCell(esc(r.grade), tags.grade) +
+      tdCell(fmt(r.proba0), tags.proba0) +
+      tdCell(fmt(r.proba1), tags.proba1) +
+      tdCell(fmt(r.proba11), tags.proba11) +
+      tdCell(esc(r.judge0), tags.judge0) +
+      tdCell(esc(r.judge1), tags.judge1) +
+      tdCell(esc(r.judge11), tags.judge11) +
+      tdCell(fmt(r.docv7), tags.docv7) +
+      "</tr>";
+  }
+
+  var candidateTableCtl = createFilterableTable(el.candidateTable, CANDIDATE_COLUMNS, {
+    leadingTh: "<th></th>",
+    getSourceRows: function () { return state.merged.filter(function (r) { return r.reasons.length > 0; }); },
+    rowRenderer: candidateRowHtml,
+    afterRender: function () {
+      Array.prototype.forEach.call(el.candidateTable.querySelectorAll(".cand-check"), function (cb) {
+        cb.addEventListener("change", function () {
+          state.checked[cb.getAttribute("data-id")] = cb.checked;
+          el.samplingCount.textContent = selectedRows().length + "건";
+          samplingTableCtl.refresh();
+          renderFullTable();
+        });
+      });
+    },
+    onCount: function (n) { el.candidateShown.textContent = n; }
+  });
 
   function selectedRows() {
-    return state.merged.filter(function (r) { return !!state.checked[r.key]; });
+    return state.merged.filter(function (r) { return !!state.checked[r.rowId]; });
   }
 
-  function renderSamplingList() {
-    var rows = selectedRows();
-    el.samplingCount.textContent = rows.length + "건";
-    var head = "<tr><th>CELL_ID</th><th>TRAY_ID</th><th>LOT_ID</th>" +
-      "<th>PROBA_case0</th><th>PROBA_case1</th><th>PROBA_case11</th>" +
-      "<th>Cell No</th><th>Cell 위치</th>" +
-      "<th>PRIVT OCV #01 OCV</th><th>PRIVT OCV #02 OCV</th><th>PRIVT OCV #03 OCV</th>" +
-      "<th>docv7</th><th>판정_case0</th><th>판정_case1</th><th>판정_case11</th></tr>";
-    var body = rows.map(function (r) {
-      return "<tr><td>" + esc(r.CELL_ID) + "</td><td>" + esc(r.TRAY_ID) + "</td><td>" + esc(r.LOT_ID) + "</td>" +
-        "<td>" + fmt(r.proba0) + "</td><td>" + fmt(r.proba1) + "</td><td>" + fmt(r.proba11) + "</td>" +
-        "<td>" + esc(r.cellNo) + "</td><td>" + esc(r.cellPos) + "</td>" +
-        "<td>" + fmt(r.ocv1) + "</td><td>" + fmt(r.ocv2) + "</td><td>" + fmt(r.ocv3) + "</td>" +
-        "<td>" + fmt(r.docv7) + "</td><td>" + esc(r.judge0) + "</td><td>" + esc(r.judge1) + "</td><td>" + esc(r.judge11) + "</td></tr>";
-    }).join("");
-    el.samplingTable.querySelector("thead").innerHTML = head;
-    el.samplingTable.querySelector("tbody").innerHTML = body;
+  var SAMPLING_COLUMNS = [
+    { key: "CELL_ID", label: "CELL_ID", type: "text" },
+    { key: "TRAY_ID", label: "TRAY_ID", type: "text" },
+    { key: "LOT_ID", label: "LOT_ID", type: "text" },
+    { key: "proba0", label: "PROBA_case0", type: "number" },
+    { key: "proba1", label: "PROBA_case1", type: "number" },
+    { key: "proba11", label: "PROBA_case11", type: "number" },
+    { key: "cellNo", label: "Cell No", type: "text" },
+    { key: "cellPos", label: "Cell 위치", type: "select" },
+    { key: "ocv1", label: "OCV#01", type: "number" },
+    { key: "ocv2", label: "OCV#02", type: "number" },
+    { key: "ocv3", label: "OCV#03", type: "number" },
+    { key: "docv7", label: "docv7", type: "number" },
+    { key: "judge0", label: "판정0", type: "select" },
+    { key: "judge1", label: "판정1", type: "select" },
+    { key: "judge11", label: "판정11", type: "select" }
+  ];
+
+  function samplingRowHtml(r) {
+    return "<tr><td>" + esc(r.CELL_ID) + "</td><td>" + esc(r.TRAY_ID) + "</td><td>" + esc(r.LOT_ID) + "</td>" +
+      "<td>" + fmt(r.proba0) + "</td><td>" + fmt(r.proba1) + "</td><td>" + fmt(r.proba11) + "</td>" +
+      "<td>" + esc(r.cellNo) + "</td><td>" + esc(r.cellPos) + "</td>" +
+      "<td>" + fmt(r.ocv1) + "</td><td>" + fmt(r.ocv2) + "</td><td>" + fmt(r.ocv3) + "</td>" +
+      "<td>" + fmt(r.docv7) + "</td><td>" + esc(r.judge0) + "</td><td>" + esc(r.judge1) + "</td><td>" + esc(r.judge11) + "</td></tr>";
   }
+
+  var samplingTableCtl = createFilterableTable(el.samplingTable, SAMPLING_COLUMNS, {
+    getSourceRows: selectedRows,
+    rowRenderer: samplingRowHtml,
+    onCount: function (n) { el.samplingShown.textContent = n; }
+  });
 
   function renderFullTable() {
     el.fullCount.textContent = state.merged.length + "건";
@@ -424,7 +625,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       "<th>등급</th><th>Cell No</th><th>Cell 위치</th>" +
       "<th>OCV#01</th><th>OCV#02</th><th>OCV#03</th><th>docv7</th><th>매칭여부</th></tr>";
     var body = state.merged.map(function (r) {
-      var cls = state.checked[r.key] ? "highlight" : "";
+      var cls = state.checked[r.rowId] ? "highlight" : "";
       return '<tr class="' + cls + '">' +
         "<td>" + esc(r.CELL_ID) + "</td><td>" + esc(r.TRAY_ID) + "</td><td>" + esc(r.LOT_ID) + "</td>" +
         "<td>" + fmt(r.proba0) + "</td><td>" + fmt(r.proba1) + "</td><td>" + fmt(r.proba11) + "</td>" +
@@ -440,8 +641,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function renderAll() {
     renderSummary();
-    renderCandidates();
-    renderSamplingList();
+    var candidates = state.merged.filter(function (r) { return r.reasons.length > 0; });
+    el.candidateCount.textContent = candidates.length + "건";
+    candidateTableCtl.buildHeader();
+    candidateTableCtl.refresh();
+    samplingTableCtl.buildHeader();
+    samplingTableCtl.refresh();
+    el.samplingCount.textContent = selectedRows().length + "건";
     renderFullTable();
   }
 
@@ -454,7 +660,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         "등급": r.grade, "Cell No": r.cellNo, "Cell 위치": r.cellPos,
         "PRIVT OCV #01 OCV": safe(r.ocv1), "PRIVT OCV #02 OCV": safe(r.ocv2), "PRIVT OCV #03 OCV": safe(r.ocv3),
         "docv7": safe(r.docv7), "매칭여부": r.matched ? "O" : "미매칭",
-        "샘플링선정": state.checked[r.key] ? "O" : ""
+        "샘플링선정": state.checked[r.rowId] ? "O" : ""
       };
     });
     var samplingRows = selectedRows().map(function (r) {
@@ -502,9 +708,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var built = buildMerged(origRows, outRows);
       state.merged = built.merged;
 
-      var msg = "매칭 완료: 출력 " + outRows.length + "건 중 " + (outRows.length - built.unmatched) + "건 매칭됨";
-      if (built.unmatched) msg += " (미매칭 " + built.unmatched + "건, 아래 표에서 '미매칭'으로 표시)";
-      showMsg(msg, built.unmatched ? "info" : "ok");
+      var msgLines = ["매칭 완료: 출력 " + outRows.length + "건 중 " + (outRows.length - built.unmatched) + "건 매칭됨" +
+        (built.unmatched ? " (미매칭 " + built.unmatched + "건, 아래 표에서 '미매칭'으로 표시)" : "")];
+
+      var outDup = findDuplicateKeys(outRows.map(function (o) { return o.CELL_ID; }));
+      if (outDup.length) {
+        msgLines.push("⚠ 출력 파일에 중복된 CELL_ID " + outDup.length + "건이 있습니다 (모두 별도 행으로 표시됩니다): " +
+          outDup.slice(0, 10).join(", ") + (outDup.length > 10 ? " 외 " + (outDup.length - 10) + "건" : ""));
+      }
+      var origDup = findDuplicateKeys(origRows.map(function (o) { return o[ORIG_KEY]; }));
+      if (origDup.length) {
+        msgLines.push("⚠ 원본 파일에 중복된 Cell ID " + origDup.length + "건이 있습니다 (마지막 행 값으로만 매칭됩니다): " +
+          origDup.slice(0, 10).join(", ") + (origDup.length > 10 ? " 외 " + (origDup.length - 10) + "건" : ""));
+      }
+
+      var hasWarning = built.unmatched || outDup.length || origDup.length;
+      showMsg(msgLines.join("\n"), hasWarning ? "info" : "ok");
 
       el.mainSections.classList.remove("hidden");
       recompute();
@@ -515,8 +734,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   });
 
-  [el.th0, el.th1, el.th11, el.thMust, el.thCand3].forEach(function (input) {
-    input.addEventListener("input", function () { if (state.merged.length) recompute(); });
+  [el.th0, el.th1, el.th11, el.thMust, el.thCand3, el.filterCand1, el.filterCand2, el.filterCand3].forEach(function (input) {
+    var evt = input.type === "checkbox" ? "change" : "input";
+    input.addEventListener(evt, function () { if (state.merged.length) recompute(); });
   });
 
   el.downloadBtn.addEventListener("click", downloadResult);
